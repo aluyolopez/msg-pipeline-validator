@@ -1,0 +1,36 @@
+# =============================================================================
+# application-local.yml — Perfil de desarrollo local (macOS)
+# =============================================================================
+#
+# Activar con: ./gradlew bootRun --args='--spring.profiles.active=local'
+#
+# En este perfil:
+#   ✅ Servidor web Tomcat activo (puerto 8081)
+#   ✅ Swagger UI disponible en http://localhost:8081/swagger-ui.html
+#   ✅ InMemoryQueueAdapter activo (no requiere AWS ni SQS real)
+#   ✅ ValidatorController activo (REST endpoint para pruebas)
+#   ✅ Logs detallados para debugging
+#   ❌ SqsConfig NO cargado (no hay SqsClient)
+#   ❌ SqsMessageQueueAdapter NO activo
+#
+# PATRÓN STRATEGY (por perfiles):
+#   En este perfil Spring inyecta InMemoryQueueAdapter en ValidateMessageUseCase.
+#   En 'aws', Spring inyecta SqsMessageQueueAdapter.
+#   El Use Case ejecuta exactamente el mismo código en ambos perfiles.
+# =============================================================================
+
+spring:
+  main:
+    # SERVLET: arranca el servidor Tomcat embebido para desarrollo local.
+    # En Lambda usamos WebApplicationType.NONE (ver ValidatorHandler static block).
+    web-application-type: servlet
+
+server:
+  port: 8081
+
+# Logging detallado para desarrollo y debugging
+logging:
+  level:
+    com.msgpipeline: DEBUG
+    org.springframework.web: INFO
+    org.springframework.boot: INFO

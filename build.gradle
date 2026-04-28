@@ -1,0 +1,146 @@
+// =============================================================================
+// build.gradle — msg-pipeline-validator-sesion-04
+// =============================================================================
+//
+// ARQUITECTURA: Hexagonal (Ports & Adapters) + Clean Architecture
+//
+// PATRÓN: Strategy + Factory para validaciones intercambiables
+//   ValidatorFactory selecciona la ValidationStrategy según el tipo de mensaje.
+//   El ValidateMessageUseCase no conoce las reglas concretas — delega al Strategy.
+//
+// FLUJO LAMBDA (perfil 'aws'):
+//   API Gateway → ValidatorHandler (APIGatewayProxyRequestEvent)
+//              → ValidateMessageUseCase → ValidatorFactory → Strategy
+//              → SqsMessageQueueAdapter → SQS Queue
+//
+// FLUJO LOCAL (perfil 'local'):
+//   HTTP POST → ValidatorController → ValidateMessageUseCase → InMemoryQueueAdapter
+//   Swagger UI: http://localhost:8081/swagger-ui.html
+//
+// TAREA DE BUILD:
+//   ./gradlew bootRun --args='--spring.profiles.active=local'  → dev local
+//   ./gradlew clean buildZip                                    → deploy Lambda
+//
+// NOTA: Solo se usa buildZip para generar el artefacto Lambda.
+//       lambdaJar NO es necesario — buildZip es el formato oficial de AWS.
+// =============================================================================
+
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.0'
+    id 'io.spring.dependency-management' version '1.1.5'
+}
+
+group   = 'com.msgpipeline'
+version = '1.0.0'
+
+// Java 17 — LTS, requerido por Spring Boot 3.x
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+configurations {
+    // @CompileOnly (Lombok) hereda los procesadores de anotaciones
+    compileOnly { extendsFrom annotationProcessor }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+
+    // ─── Spring Boot Core ────────────────────────────────────────────────────
+    // Contexto IoC, gestión de beans, perfiles de entorno.
+    // En Lambda: solo el contenedor DI, NO el servidor web.
+    implementation 'org.springframework.boot:spring-boot-starter'
+
+    // Servidor Tomcat embebido + MVC.
+    // Usado ÚNICAMENTE con el perfil 'local'. En Lambda usamos WebApplicationType.NONE.
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // Validación de DTOs con anotaciones (@NotBlank, @Email, etc.)
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // ─── SpringDoc OpenAPI — Swagger UI ──────────────────────────────────────
+    // Genera documentación interactiva en http://localhost:8081/swagger-ui.html
+    // Solo disponible en perfil 'local' (requiere servidor HTTP activo).
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+
+    // ─── AWS Lambda ──────────────────────────────────────────────────────────
+    // aws-lambda-java-core: RequestHandler<INPUT, OUTPUT> y Context.
+    // aws-lambda-java-events: APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent.
+    implementation 'com.amazonaws:aws-lambda-java-core:1.2.3'
+    implementation 'com.amazonaws:aws-lambda-java-events:3.11.4'
+
+    // ─── AWS SDK v2 ──────────────────────────────────────────────────────────
+    // BOM centraliza versiones. No requiere versión explícita por módulo.
+    implementation platform('software.amazon.awssdk:bom:2.25.40')
+
+    // SQS: encolar mensajes validados para procesamiento asíncrono (Sesión 04)
+    implementation 'software.amazon.awssdk:sqs'
+
+    // ─── Utilidades ──────────────────────────────────────────────────────────
+    // Jackson: serialización/deserialización del body APIGateway ↔ MessagePayload.
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Lombok: @Data, @Builder, @Slf4j, @RequiredArgsConstructor, etc.
+    compileOnly    'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // ─── Tests ───────────────────────────────────────────────────────────────
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+// ─── Configuración del JAR ───────────────────────────────────────────────────
+//
+// PROBLEMA con Spring Boot fat JAR (bootJar):
+//   bootJar empaqueta clases bajo BOOT-INF/classes/ — Lambda no las encuentra.
+//
+// SOLUCIÓN: desactivar bootJar, usar buildZip (formato oficial de Lambda).
+//
+bootJar { enabled = false }  // Desactivar Spring Boot fat JAR
+jar     { enabled = true  }  // Activar JAR plano (clases en raíz)
+
+// ─── buildZip — Formato ZIP oficial para AWS Lambda Java ─────────────────────
+//
+// Estructura del ZIP generado:
+//   msg-pipeline-validator-lambda.zip
+//   ├── com/msgpipeline/validator/ValidatorHandler.class    ← clases del proyecto
+//   ├── com/msgpipeline/validator/domain/...
+//   ├── com/msgpipeline/validator/application/...
+//   └── lib/
+//       ├── spring-boot-3.5.0.jar                          ← dependencias intactas
+//       ├── aws-lambda-java-core-1.2.3.jar
+//       ├── aws-lambda-java-events-3.11.4.jar
+//       └── ...
+//
+// Handler a configurar en Lambda:
+//   com.msgpipeline.validator.ValidatorHandler::handleRequest
+//
+tasks.register('buildZip', Zip) {
+    group       = 'build'
+    description = 'Genera el ZIP de despliegue para AWS Lambda (clases en raíz + deps en lib/)'
+
+    archiveFileName      = 'msg-pipeline-validator-lambda.zip'
+    destinationDirectory = layout.buildDirectory.dir('distributions')
+
+    // Compilar antes de empaquetar
+    dependsOn compileJava, processResources
+
+    // 1. Clases del proyecto en la RAÍZ del ZIP (Lambda las encuentra aquí)
+    from sourceSets.main.output
+
+    // 2. Dependencias en lib/ (sin descomprimir — Lambda's classloader las carga)
+    into('lib') {
+        from configurations.runtimeClasspath
+    }
+}
+
+// 'build' también ejecuta 'buildZip'
+build.dependsOn buildZip
+
+test {
+    useJUnitPlatform()
+}

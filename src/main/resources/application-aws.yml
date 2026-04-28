@@ -1,0 +1,36 @@
+# =============================================================================
+# application-aws.yml — Perfil de producción (AWS Lambda)
+# =============================================================================
+#
+# Este perfil lo activa ValidatorHandler.java en el bloque static:
+#   SpringApplicationBuilder.profiles("aws")
+#
+# En este perfil:
+#   ✅ Sin servidor web (WebApplicationType.SERVLET en ValidatorHandler,
+#      pero spring.main.web-application-type=none lo deshabilita)
+#   ✅ SqsConfig se carga → SqsClient disponible
+#   ✅ SqsMessageQueueAdapter activo (@Profile("aws"))
+#   ✅ Credenciales via IAM Role del Lambda (DefaultCredentialsProvider)
+#   ❌ ValidatorController NO existe (@Profile("local"))
+#   ❌ Swagger UI NO disponible (no hay servidor HTTP)
+#
+# VARIABLES DE ENTORNO requeridas en la consola Lambda:
+#   SQS_QUEUE_URL = https://sqs.us-east-1.amazonaws.com/{accountId}/msg-pipeline-queue
+#   AWS_REGION    = us-east-1  (la inyecta Lambda automáticamente)
+#
+# HANDLER A CONFIGURAR EN LAMBDA:
+#   com.msgpipeline.validator.ValidatorHandler::handleRequest
+# =============================================================================
+
+spring:
+  main:
+    # NONE: no arranca servidor web — crucial para no desperdiciar
+    # memoria y tiempo de inicio en Lambda.
+    web-application-type: none
+    allow-bean-definition-overriding: false
+
+# En Lambda los logs van a CloudWatch Logs automáticamente
+logging:
+  level:
+    com.msgpipeline: INFO
+    software.amazon.awssdk: WARN

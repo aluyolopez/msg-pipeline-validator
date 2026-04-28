@@ -1,0 +1,47 @@
+# =============================================================================
+# application.yml — Configuración base del msg-pipeline-validator (Sesión 04)
+# =============================================================================
+#
+# PRINCIPIO: Separación de configuración por entorno (12-Factor App, Factor III)
+#
+# Este archivo define los valores COMUNES a todos los perfiles.
+# Los valores específicos por entorno se definen en:
+#   application-local.yml → perfil 'local' (desarrollo en macOS, puerto 8081)
+#   application-aws.yml   → perfil 'aws'   (Lambda en AWS)
+#
+# INTERPOLACIÓN DE VARIABLES:
+#   ${VARIABLE:default} → usa la variable de entorno si existe, sino el default
+#   Esto permite que el mismo código funcione local y en Lambda sin cambios.
+# =============================================================================
+
+spring:
+  application:
+    name: msg-pipeline-validator-sesion-04
+
+# ─── Configuración de la aplicación ─────────────────────────────────────────
+app:
+  aws:
+    # Región de AWS donde están desplegados los servicios
+    # En Lambda: la variable AWS_REGION_NAME la inyecta el runtime automáticamente
+    region: ${AWS_REGION_NAME:us-east-1}
+
+    # URL completa de la cola SQS de destino para mensajes validados
+    # Formato: https://sqs.{region}.amazonaws.com/{accountId}/msg-pipeline-queue
+    # En Lambda: configurar como variable de entorno SQS_QUEUE_URL
+    sqs-queue-url: ${SQS_QUEUE_URL:}
+
+# ─── SpringDoc / Swagger ─────────────────────────────────────────────────────
+# Disponible solo con el perfil 'local'.
+# En Lambda (perfil 'aws'), Swagger no aplica — no hay servidor HTTP.
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+  api-docs:
+    path: /v3/api-docs
+
+# ─── Logging ─────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.msgpipeline: INFO
+    software.amazon.awssdk: WARN

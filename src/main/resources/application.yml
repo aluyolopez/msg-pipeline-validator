@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: msg-pipeline-validator-sesion-07
+app:
+  aws:
+    region: ${AWS_REGION_NAME:us-east-1}
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+logging:
+  level:
+    com.msgpipeline: INFO

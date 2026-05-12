@@ -1,0 +1,6 @@
+# Perfil AWS Lambda
+# HANDLER: com.msgpipeline.validator.ValidatorHandler::handleRequest
+# TIMEOUT: 15s | MEMORIA: 512 MB
+logging:
+  level:
+    com.msgpipeline: INFO
